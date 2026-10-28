@@ -1,0 +1,151 @@
+<main class="page">
+  <header class="topbar">
+    <a class="brand" href="/" aria-label="TaskTracker home">
+      <span class="brand-icon">✓</span>
+      <span>TaskTracker</span>
+    </a>
+    <span class="version-label">PERSONAL WORKSPACE</span>
+  </header>
+
+  <section class="content">
+    <div class="intro">
+      <p class="eyebrow">YOUR WORKSPACE</p>
+      <h1>Make today count.</h1>
+      <p class="subtitle">Small steps lead to big results. What's on your list?</p>
+    </div>
+
+    <section class="summary">
+      <div>
+        <span class="summary-label">Total tasks</span>
+        <strong>{{ tasks.length }}</strong>
+      </div>
+      <div>
+        <span class="summary-label">Completed</span>
+        <strong>{{ completedCount }}</strong>
+      </div>
+      <div>
+        <span class="summary-label">Remaining</span>
+        <strong>{{ tasks.length - completedCount }}</strong>
+      </div>
+    </section>
+
+    <form class="add-form" (ngSubmit)="addTask()">
+      <input
+        type="text"
+        name="newTaskTitle"
+        [(ngModel)]="newTaskTitle"
+        placeholder="What needs to get done?"
+        aria-label="New task title"
+        maxlength="100"
+      />
+      <button type="submit" [disabled]="!newTaskTitle.trim()">
+        <span aria-hidden="true">+</span> Add task
+      </button>
+    </form>
+
+    <section class="task-section">
+      <div class="section-heading">
+        <h2>Your tasks</h2>
+        <span class="task-count">{{ filteredTasks.length }} shown</span>
+      </div>
+
+      <nav class="filters" aria-label="Filter tasks">
+        <button
+          type="button"
+          [class.active]="activeFilter === 'all'"
+          [attr.aria-pressed]="activeFilter === 'all'"
+          (click)="setFilter('all')"
+        >
+          All
+        </button>
+        <button
+          type="button"
+          [class.active]="activeFilter === 'pending'"
+          [attr.aria-pressed]="activeFilter === 'pending'"
+          (click)="setFilter('pending')"
+        >
+          Pending
+        </button>
+        <button
+          type="button"
+          [class.active]="activeFilter === 'completed'"
+          [attr.aria-pressed]="activeFilter === 'completed'"
+          (click)="setFilter('completed')"
+        >
+          Completed
+        </button>
+      </nav>
+
+      @if (isLoading) {
+        <div class="empty-state">
+          <span class="empty-icon">⏳</span>
+          <h3>Loading tasks...</h3>
+          <p>Please wait while we fetch your tasks.</p>
+        </div>
+      } @else if (errorMessage) {
+        <div class="empty-state">
+          <span class="empty-icon">!</span>
+          <h3>Something went wrong</h3>
+          <p>{{ errorMessage }}</p>
+
+          <button type="button" (click)="loadTasks()">Try again</button>
+        </div>
+      } @else {
+        <div class="task-list">
+          @for (task of filteredTasks; track task.id) {
+            <article class="task-card" [class.completed]="task.isCompleted">
+              <label class="task-checkbox">
+                <input
+                  type="checkbox"
+                  [checked]="task.isCompleted"
+                  [attr.aria-label]="
+                    'Mark ' + task.title + ' as ' + (task.isCompleted ? 'pending' : 'completed')
+                  "
+                  (change)="toggleTask(task.id)"
+                />
+                <span class="custom-checkbox" aria-hidden="true"></span>
+              </label>
+
+              <div class="task-details">
+                <h3>{{ task.title }}</h3>
+                @if (task.description) {
+                  <p>{{ task.description }}</p>
+                }
+                <span class="task-date"> Created {{ task.createdAt | date: 'mediumDate' }} </span>
+              </div>
+
+              <span class="status" [class.status-done]="task.isCompleted">
+                {{ task.isCompleted ? 'Completed' : 'Pending' }}
+              </span>
+
+              <button
+                class="delete-button"
+                type="button"
+                [attr.aria-label]="'Delete ' + task.title"
+                (click)="deleteTask(task.id)"
+              >
+                &times;
+              </button>
+            </article>
+          } @empty {
+            <div class="empty-state">
+              <span class="empty-icon">✓</span>
+              <h3>Nothing here yet</h3>
+              <p>
+                @if (activeFilter === 'completed') {
+                  Complete a task and it will appear here.
+                } @else if (activeFilter === 'pending') {
+                  You're all caught up. No pending tasks!
+                } @else {
+                  Add your first task above to get started.
+                }
+              </p>
+            </div>
+          }
+        </div>
+      }
+    </section>
+
+    <footer class="footer">Built while learning Angular &amp; ASP.NET Core</footer>
+  </section>
+</main>
