@@ -1,151 +1,323 @@
 <main class="page">
   <header class="topbar">
     <a class="brand" href="/" aria-label="TaskTracker home">
-      <span class="brand-icon">✓</span>
+      <span class="brand-icon" aria-hidden="true">✓</span>
       <span>TaskTracker</span>
     </a>
-    <span class="version-label">PERSONAL WORKSPACE</span>
+    <span class="topbar-date">{{ today | date: 'EEEE, MMM d' }}</span>
   </header>
 
   <section class="content">
     <div class="intro">
-      <p class="eyebrow">YOUR WORKSPACE</p>
-      <h1>Make today count.</h1>
-      <p class="subtitle">Small steps lead to big results. What's on your list?</p>
+      <h1>
+        @if (tasks().length === 0 && !isLoading()) {
+          A clean slate
+        } @else if (remainingCount() === 0) {
+          All done for now
+        } @else {
+          {{ remainingCount() }} {{ remainingCount() === 1 ? 'task' : 'tasks' }} left
+        }
+      </h1>
+      <p class="subtitle">
+        @if (tasks().length === 0 && !isLoading()) {
+          Add your first task below to get started.
+        } @else {
+          {{ completedCount() }} of {{ tasks().length }} completed
+        }
+      </p>
+
+      @if (tasks().length > 0) {
+        <div
+          class="progress"
+          role="progressbar"
+          aria-label="Completed tasks"
+          aria-valuemin="0"
+          aria-valuemax="100"
+          [attr.aria-valuenow]="progressPercent()"
+        >
+          <div class="progress-fill" [style.width.%]="progressPercent()"></div>
+        </div>
+      }
     </div>
 
-    <section class="summary">
-      <div>
-        <span class="summary-label">Total tasks</span>
-        <strong>{{ tasks.length }}</strong>
-      </div>
-      <div>
-        <span class="summary-label">Completed</span>
-        <strong>{{ completedCount }}</strong>
-      </div>
-      <div>
-        <span class="summary-label">Remaining</span>
-        <strong>{{ tasks.length - completedCount }}</strong>
-      </div>
-    </section>
-
-    <form class="add-form" (ngSubmit)="addTask()">
+    <form class="composer" (ngSubmit)="addTask()">
       <input
+        class="composer-title"
         type="text"
         name="newTaskTitle"
         [(ngModel)]="newTaskTitle"
         placeholder="What needs to get done?"
         aria-label="New task title"
         maxlength="100"
+        autocomplete="off"
+        [disabled]="isSubmitting()"
+        required
       />
-      <button type="submit" [disabled]="!newTaskTitle.trim()">
-        <span aria-hidden="true">+</span> Add task
-      </button>
+
+      <textarea
+        class="composer-description"
+        name="newTaskDescription"
+        [(ngModel)]="newTaskDescription"
+        placeholder="Add details (optional)"
+        aria-label="Task description (optional)"
+        maxlength="1000"
+        rows="2"
+        [disabled]="isSubmitting()"
+      ></textarea>
+
+      <div class="composer-footer">
+        <span class="hint" [class.hint-warn]="newTaskTitle.length >= 90">
+          {{ newTaskTitle.length }}/100
+        </span>
+        <button
+          class="btn btn-primary"
+          type="submit"
+          [disabled]="!newTaskTitle.trim() || isSubmitting()"
+        >
+          @if (isSubmitting()) {
+            Adding task…
+          } @else {
+            Add task
+          }
+        </button>
+      </div>
     </form>
 
-    <section class="task-section">
+    @if (actionError()) {
+      <div class="error-banner" role="alert">
+        <span>{{ actionError() }}</span>
+        <button
+          class="icon-button"
+          type="button"
+          aria-label="Dismiss error"
+          (click)="dismissError()"
+        >
+          &times;
+        </button>
+      </div>
+    }
+
+    <section class="task-section" aria-labelledby="tasks-heading">
       <div class="section-heading">
-        <h2>Your tasks</h2>
-        <span class="task-count">{{ filteredTasks.length }} shown</span>
+        <h2 id="tasks-heading">Your tasks</h2>
+        <span class="task-count" aria-live="polite"> {{ filteredTasks().length }} shown </span>
       </div>
 
-      <nav class="filters" aria-label="Filter tasks">
-        <button
-          type="button"
-          [class.active]="activeFilter === 'all'"
-          [attr.aria-pressed]="activeFilter === 'all'"
-          (click)="setFilter('all')"
-        >
-          All
-        </button>
-        <button
-          type="button"
-          [class.active]="activeFilter === 'pending'"
-          [attr.aria-pressed]="activeFilter === 'pending'"
-          (click)="setFilter('pending')"
-        >
-          Pending
-        </button>
-        <button
-          type="button"
-          [class.active]="activeFilter === 'completed'"
-          [attr.aria-pressed]="activeFilter === 'completed'"
-          (click)="setFilter('completed')"
-        >
-          Completed
-        </button>
-      </nav>
+      <div class="toolbar">
+        <nav class="filters" aria-label="Filter tasks">
+          <button
+            type="button"
+            [class.active]="activeFilter() === 'all'"
+            [attr.aria-pressed]="activeFilter() === 'all'"
+            (click)="setFilter('all')"
+          >
+            All <span class="filter-count">{{ tasks().length }}</span>
+          </button>
+          <button
+            type="button"
+            [class.active]="activeFilter() === 'pending'"
+            [attr.aria-pressed]="activeFilter() === 'pending'"
+            (click)="setFilter('pending')"
+          >
+            Pending <span class="filter-count">{{ remainingCount() }}</span>
+          </button>
+          <button
+            type="button"
+            [class.active]="activeFilter() === 'completed'"
+            [attr.aria-pressed]="activeFilter() === 'completed'"
+            (click)="setFilter('completed')"
+          >
+            Completed <span class="filter-count">{{ completedCount() }}</span>
+          </button>
+        </nav>
 
-      @if (isLoading) {
-        <div class="empty-state">
-          <span class="empty-icon">⏳</span>
-          <h3>Loading tasks...</h3>
-          <p>Please wait while we fetch your tasks.</p>
+        <div class="search">
+          <input
+            type="search"
+            name="search"
+            placeholder="Search tasks"
+            aria-label="Search tasks"
+            autocomplete="off"
+            [ngModel]="searchQuery()"
+            (ngModelChange)="searchQuery.set($event)"
+          />
         </div>
-      } @else if (errorMessage) {
-        <div class="empty-state">
-          <span class="empty-icon">!</span>
-          <h3>Something went wrong</h3>
-          <p>{{ errorMessage }}</p>
+      </div>
 
-          <button type="button" (click)="loadTasks()">Try again</button>
+      @if (isLoading()) {
+        <div class="task-list" aria-busy="true" aria-label="Loading tasks">
+          @for (i of skeletonRows; track i) {
+            <div class="task-card skeleton" aria-hidden="true">
+              <span class="skeleton-box skeleton-check"></span>
+              <div class="skeleton-lines">
+                <span class="skeleton-box skeleton-line"></span>
+                <span class="skeleton-box skeleton-line short"></span>
+              </div>
+            </div>
+          }
+        </div>
+      } @else if (errorMessage()) {
+        <div class="empty-state" role="alert">
+          <span class="empty-icon" aria-hidden="true">!</span>
+          <h3>Couldn't load your tasks</h3>
+          <p>{{ errorMessage() }}</p>
+          <button class="btn btn-primary" type="button" (click)="loadTasks()">Try again</button>
         </div>
       } @else {
         <div class="task-list">
-          @for (task of filteredTasks; track task.id) {
+          @for (task of filteredTasks(); track task.id) {
             <article class="task-card" [class.completed]="task.isCompleted">
               <label class="task-checkbox">
                 <input
                   type="checkbox"
                   [checked]="task.isCompleted"
+                  [disabled]="isUpdating(task.id) || editingTaskId() === task.id"
                   [attr.aria-label]="
                     'Mark ' + task.title + ' as ' + (task.isCompleted ? 'pending' : 'completed')
                   "
-                  (change)="toggleTask(task.id)"
+                  (change)="toggleTask(task.id, $event)"
                 />
                 <span class="custom-checkbox" aria-hidden="true"></span>
               </label>
 
               <div class="task-details">
-                <h3>{{ task.title }}</h3>
-                @if (task.description) {
-                  <p>{{ task.description }}</p>
+                @if (editingTaskId() === task.id) {
+                  <form
+                    class="edit-task-form"
+                    (ngSubmit)="saveTask(task.id)"
+                    (keydown.escape)="cancelEditing()"
+                  >
+                    <input
+                      type="text"
+                      name="editTitle"
+                      [(ngModel)]="editTaskTitle"
+                      placeholder="Task title"
+                      aria-label="Edit task title"
+                      maxlength="100"
+                      autocomplete="off"
+                      required
+                      [disabled]="isSaving(task.id)"
+                    />
+
+                    <textarea
+                      name="editDescription"
+                      [(ngModel)]="editTaskDescription"
+                      placeholder="Details (optional)"
+                      aria-label="Edit task description"
+                      maxlength="1000"
+                      rows="3"
+                      [disabled]="isSaving(task.id)"
+                    ></textarea>
+
+                    <div class="edit-actions">
+                      <button
+                        class="btn btn-primary"
+                        type="submit"
+                        [disabled]="!editTaskTitle.trim() || isSaving(task.id)"
+                      >
+                        @if (isSaving(task.id)) {
+                          Saving…
+                        } @else {
+                          Save changes
+                        }
+                      </button>
+                      <button
+                        class="btn btn-ghost"
+                        type="button"
+                        (click)="cancelEditing()"
+                        [disabled]="isSaving(task.id)"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </form>
+                } @else {
+                  <h3>{{ task.title }}</h3>
+                  @if (task.description) {
+                    <p class="task-description">{{ task.description }}</p>
+                  }
+                  <div class="task-meta">
+                    <span class="status" [class.status-done]="task.isCompleted">
+                      {{ task.isCompleted ? 'Completed' : 'Pending' }}
+                    </span>
+                    <span class="task-date">Created {{ task.createdAt | date: 'mediumDate' }}</span>
+                  </div>
                 }
-                <span class="task-date"> Created {{ task.createdAt | date: 'mediumDate' }} </span>
               </div>
 
-              <span class="status" [class.status-done]="task.isCompleted">
-                {{ task.isCompleted ? 'Completed' : 'Pending' }}
-              </span>
-
-              <button
-                class="delete-button"
-                type="button"
-                [attr.aria-label]="'Delete ' + task.title"
-                (click)="deleteTask(task.id)"
-              >
-                &times;
-              </button>
+              @if (editingTaskId() !== task.id) {
+                <div class="task-actions">
+                  @if (confirmingDeleteId() === task.id) {
+                    <span class="confirm-text">Delete this task?</span>
+                    <button
+                      class="btn btn-danger"
+                      type="button"
+                      [disabled]="isDeleting(task.id)"
+                      (click)="deleteTask(task.id)"
+                    >
+                      @if (isDeleting(task.id)) {
+                        Deleting…
+                      } @else {
+                        Delete
+                      }
+                    </button>
+                    <button
+                      class="btn btn-ghost"
+                      type="button"
+                      [disabled]="isDeleting(task.id)"
+                      (click)="cancelDelete()"
+                    >
+                      Keep
+                    </button>
+                  } @else {
+                    <button
+                      class="btn btn-ghost"
+                      type="button"
+                      [disabled]="isSaving(task.id)"
+                      [attr.aria-label]="'Edit ' + task.title"
+                      (click)="startEditing(task)"
+                    >
+                      Edit
+                    </button>
+                    <button
+                      class="btn btn-ghost btn-ghost-danger"
+                      type="button"
+                      [attr.aria-label]="'Delete ' + task.title"
+                      (click)="requestDelete(task.id)"
+                    >
+                      Delete
+                    </button>
+                  }
+                </div>
+              }
             </article>
           } @empty {
             <div class="empty-state">
-              <span class="empty-icon">✓</span>
-              <h3>Nothing here yet</h3>
-              <p>
-                @if (activeFilter === 'completed') {
-                  Complete a task and it will appear here.
-                } @else if (activeFilter === 'pending') {
-                  You're all caught up. No pending tasks!
-                } @else {
-                  Add your first task above to get started.
-                }
-              </p>
+              <span class="empty-icon" aria-hidden="true">✓</span>
+              @if (hasSearch()) {
+                <h3>No matching tasks</h3>
+                <p>
+                  Nothing matches &ldquo;{{ searchQuery().trim() }}&rdquo;. Try a different word.
+                </p>
+                <button class="btn btn-ghost" type="button" (click)="clearSearch()">
+                  Clear search
+                </button>
+              } @else if (activeFilter() === 'completed') {
+                <h3>No completed tasks</h3>
+                <p>Tasks you finish will show up here.</p>
+              } @else if (activeFilter() === 'pending') {
+                <h3>You're all caught up</h3>
+                <p>No pending tasks left.</p>
+              } @else {
+                <h3>No tasks yet</h3>
+                <p>Add your first task above to get started.</p>
+              }
             </div>
           }
         </div>
       }
     </section>
 
-    <footer class="footer">Built while learning Angular &amp; ASP.NET Core</footer>
+    <footer class="footer">&copy; {{ currentYear() }} TaskTracker. All rights reserved.</footer>
   </section>
 </main>
